@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: mosquitto_broker
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./data:/mosquitto/data
+      - ./log:/mosquitto/log
+    ports:
+      - "1883:1883"
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok_forwarder
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    command:
+      - "tcp"
+      - "mosquitto:1883"
+    ports:
+      - "4040:4040"
+
+  notifier:
+    build: ./notifier
+    container_name: mqtt_notifier
+    restart: unless-stopped
+    depends_on:
+      - ngrok
+    environment:
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      NGROK_API: "http://ngrok:4040/api/tunnels"
+      COMPOSE_FILE: "/compose/docker-compose.yml"
+    volumes:
+      - ./notifier/state:/state
+      - /var/run/docker.sock:/var/run/docker.sock 
+      - ./:/compose                           
